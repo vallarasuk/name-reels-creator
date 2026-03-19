@@ -238,14 +238,14 @@ def generate_ass(name, style, total, data_list, path):
     type_end      = type_start + sum(delays)
     content_start = type_end + 0.3
     
-    # Timing
+    # Timing (3 slides now)
     available_content_time = total - content_start - 5.5
-    slide_dur = available_content_time / 4.0
+    s1_dur = available_content_time * 0.30
+    s2_dur = available_content_time * 0.30
+    s3_dur = available_content_time * 0.40 # Grand Vision gets more time
     
-    s1_end = content_start + slide_dur
-    s2_end = s1_end + slide_dur
-    s3_end = s2_end + slide_dur
-    vision_start = s3_end
+    s1_end = content_start + s1_dur
+    s2_end = s1_end + s2_dur
     vision_end   = total - 5.5
     outro_start  = vision_end
 
@@ -305,7 +305,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ass += f"Dialogue: 1,{t(content_start+1.9)},{t(s1_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L4})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}💎 RESONATES WITH\n"
     ass += f"Dialogue: 1,{t(content_start+2.1)},{t(s1_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V4})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_comp}\n"
 
-    # SLIDE 2: HIDDEN POWERS
+    # SLIDE 2: POWER & DESTINY
     ass += f"Dialogue: 1,{t(s1_end)},{t(s2_end)},Title,,0,0,0,,{{\\pos({CX},{Y_TIT})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
     ass += f"Dialogue: 1,{t(s1_end+0.4)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}⚡ INNER STRENGTH\n"
     ass += f"Dialogue: 1,{t(s1_end+0.6)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1})\\fs52\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_strength}\n"
@@ -313,12 +313,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ass += f"Dialogue: 1,{t(s1_end+1.1)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V2})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_destiny}\n"
     ass += f"Dialogue: 1,{t(s1_end+1.4)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L3})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🚀 LIFE PATH\n"
     ass += f"Dialogue: 1,{t(s1_end+1.6)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V3})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_path}\n"
+    ass += f"Dialogue: 1,{t(s1_end+1.9)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L4})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🌿 SPIRIT ELEMENT\n"
+    ass += f"Dialogue: 1,{t(s1_end+2.1)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V4})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_element}\n"
 
-    # SLIDE 3: SACRED ELEMENTS
-    ass += f"Dialogue: 1,{t(s2_end)},{t(s3_end)},Title,,0,0,0,,{{\\pos({CX},{Y_TIT})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
-    ass += f"Dialogue: 1,{t(s2_end+0.4)},{t(s3_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🌿 SPIRIT ELEMENT\n"
-    ass += f"Dialogue: 1,{t(s2_end+0.6)},{t(s3_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1})\\fs52\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_element}\n"
-    ass += f"Dialogue: 1,{t(s2_end+0.9)},{t(s3_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L2})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}📚 SACRED FACT\n"
+    # SLIDE 3: GRAND VISION
+    ass += f"Dialogue: 1,{t(s2_end)},{t(vision_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_TIT-50})\\fs65\\c{pc[2:]}\\an5\\fad(500,500)}}💫 GRAND VISION\n"
+    ass += f"Dialogue: 1,{t(s2_end+0.4)},{t(vision_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1+50})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}📚 SACRED FACT\n"
     
     # Wrap sacred fact
     wrapped_fact = ""
@@ -331,12 +331,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         wrapped_fact += w + " "
         f_line += len(w) + 1
 
-    ass += f"Dialogue: 1,{t(s2_end+1.1)},{t(s3_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V2})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}{wrapped_fact}\n"
+    ass += f"Dialogue: 1,{t(s2_end+0.7)},{t(vision_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1+50})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}{wrapped_fact}\n"
 
-    # GRAND VISION SLIDE
-    ass += f"Dialogue: 1,{t(vision_start)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_VISION_L})\\fs65\\c{pc[2:]}\\an5\\fad(500,500)}}💫 GRAND VISION\n"
-    
-    # Wrap vision
+    # Vision Body
     wrapped_vision = ""
     v_words = safe_vision.split()
     v_line = 0
@@ -347,7 +344,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         wrapped_vision += w + " "
         v_line += len(w) + 1
 
-    ass += f"Dialogue: 1,{t(vision_start+0.5)},{t(outro_start)},DeepBody,,0,0,0,,{{\\pos({CX},{Y_VISION_V})\\fs50\\c{hc[2:]}\\an5\\fad(800,500)}}{wrapped_vision}\n"
+    ass += f"Dialogue: 1,{t(s2_end+1.2)},{t(vision_end)},DeepBody,,0,0,0,,{{\\pos({CX},{Y_VISION_V+40})\\fs50\\c{hc[2:]}\\an5\\fad(800,500)}}{wrapped_vision}\n"
 
     # Hold to read
     ass += f"Dialogue: 2,{t(content_start+2.5)},{t(outro_start)},Highlight,,0,0,0,,{{\\pos({CX},{Y_HOLD})\\fs42\\c&H00FFFFFF\\3c&H66000000\\an5\\fad(600,0)}}👉 {name.upper()} SOUL REVEALED\n"
@@ -386,8 +383,8 @@ def build_name_reel(name, style, music_path, output_path):
     bg_color = style["bg"]
     n = len(name)
     typing_time = 1.8 + 0.8 + max(0, n-2) * 0.3
-    # Calculate required time: Intro(3.7 + typing) + 3 Slides(6.5 each) + Vision(7.5) + Outro(5.5)
-    required_time = 3.7 + typing_time + (3 * 6.5) + 7.5 + 5.5
+    # Calculate required time: Intro(3.7 + typing) + 2 Slides(9s each) + Vision(12s) + Outro(5.5)
+    required_time = 3.7 + typing_time + (2 * 9.0) + 12.0 + 5.5
     total = int(max(DEFAULT_VIDEO_DURATION, min(45, required_time)))
 
     print(f"📖 Getting data for: {name}")
