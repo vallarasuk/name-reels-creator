@@ -8,6 +8,7 @@ import sys
 import logging
 import re
 import requests
+import audio_utils
 
 logging.basicConfig(filename="name_reel_debug.log", level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s")
@@ -18,7 +19,7 @@ TEMP_DIR = "name_temp"
 VIDEO_W = 1080
 VIDEO_H = 1920
 FPS = 60
-DEFAULT_VIDEO_DURATION = 22
+DEFAULT_VIDEO_DURATION = 35
 
 FONT_STYLES = [
     {"name":"golden_dark",    "bg":"0x0a0800", "pc":"&H0000AAFF", "hc":"&H0000CCFF", "wc":"&H880000AA", "label":"Golden Edition"},
@@ -54,11 +55,12 @@ FALLBACK_MEANINGS = {
     "senthil":"Young lord murugan","vinoth":"Skillful","ashwin":"Horse tamer",
 }
 
-GEMINI_API_KEY = "AIzaSyB2my5WTnZURK0TCCBCYmyxUNPk9IntT3g"
+GEMINI_API_KEY = "AIzaSyAixrlIysLeoA7T26_HgB52hinocVGwkgU"
 GEMINI_MODELS = [
     "gemini-flash-latest",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite",
 ]
 
 def get_font_path():
@@ -81,31 +83,33 @@ def clean(text, maxl=50):
 
 def fetch_name_data(name):
     api_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY)
-    prompt = f"""For the name "{name}", research and generate a profile with exactly nine fields.
-If a historical field is not certain, provide a creative and culturally appropriate value.
+    prompt = f"""For the name "{name}", research and generate a deep profile with exactly ten fields.
+Provide profound, clear, and culturally significant insights.
 
-1. Meaning: (A beautiful 4-6 word description)
-2. Origin: (Language or culture of origin)
-3. Lucky Color: (A vibrant, specific color and why)
-4. Lucky Number: (A single auspicious number)
-5. Lucky Day: (A significant day for this name)
-6. Compatibility: (Three starting letters of compatible names, e.g. 'Best with: A, S, R')
-7. Personality: (A positive trait summary, max 8 words)
-8. Fact: (A unique or historical fact, max 10 words)
-9. Visual: (Describe a high-quality cinematic background scene for this name. No text. 10 words max.)
+1. Essence: (A deep, poetic 4-6 word description of the name's meaning)
+2. Legacy: (The historical or cultural root of the name)
+3. Aura: (A specific color and the 'vibration' or 'energy' it radiates)
+4. Destiny: (The primary life purpose or destiny associated with this name)
+5. Strength: (The most powerful character trait or 'superpower')
+6. Life Path: (A short sentence on what this person is meant to achieve)
+7. Compatible: (Three names or starting letters that resonate with this aura)
+8. Element: (The natural element or spirit animal associated with this vibe)
+9. Sacred Fact: (A unique historical, spiritual, or linguistic fact)
+10. Grand Vision: (A profound spiritual or personality breakdown, 40-50 words. Clear and deep!)
 
 Format as:
-Meaning: [Value]
-Origin: [Value]
-Lucky Color: [Value]
-Lucky Number: [Value]
-Lucky Day: [Value]
-Compatibility: [Value]
-Personality: [Value]
-Fact: [Value]
-Visual: [Value]
+Essence: [Value]
+Legacy: [Value]
+Aura: [Value]
+Destiny: [Value]
+Strength: [Value]
+Life Path: [Value]
+Compatible: [Value]
+Element: [Value]
+Sacred Fact: [Value]
+Grand Vision: [Value]
 
-Return ONLY these 9 data lines. Do not use markdown like bolding or lists."""
+Return ONLY these 10 data lines. Do not use markdown like bolding or lists."""
 
     for model in GEMINI_MODELS:
         try:
@@ -113,15 +117,17 @@ Return ONLY these 9 data lines. Do not use markdown like bolding or lists."""
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
                 headers={"Content-Type": "application/json"},
                 json={"contents":[{"parts":[{"text":prompt}]}],
-                      "generationConfig":{"temperature":0.7,"maxOutputTokens":450}},
+                      "generationConfig":{"temperature":0.7,"maxOutputTokens":1024}},
                 timeout=15
             )
             data = r.json()
+            # LOG raw Gemini result
+            logger.info(f"Gemini raw response for {name}:\n{data}")
+            
             if "candidates" in data and data["candidates"]:
                 raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                res = {"meaning":"","origin":"","color":"","num":"","day":"","comp":"","traits":"","fact":"","visual":""}
+                res = {"essence":"","legacy":"","aura":"","destiny":"","strength":"","path":"","comp":"","element":"","fact":"","vision":""}
                 
-                # Robust parsing considering Line X:, labels, and colons
                 for line in raw_text.splitlines():
                     line_clean = re.sub(r"[\\{}'\"*#]", "", line).strip()
                     if ":" in line_clean:
@@ -129,42 +135,42 @@ Return ONLY these 9 data lines. Do not use markdown like bolding or lists."""
                         tag = parts[0].strip().lower()
                         val = parts[1].strip()
                         
-                        # Match tags within the first part
-                        if "meaning" in tag: res["meaning"] = val
-                        elif "origin" in tag: res["origin"] = val
-                        elif "color" in tag: res["color"] = val
-                        elif "num" in tag or "number" in tag: res["num"] = val
-                        elif "day" in tag: res["day"] = val
-                        elif "comp" in tag or "compatibility" in tag: res["comp"] = val
-                        elif "person" in tag or "trait" in tag: res["traits"] = val
+                        if "essence" in tag or "meaning" in tag: res["essence"] = val
+                        elif "legacy" in tag or "origin" in tag: res["legacy"] = val
+                        elif "aura" in tag or "color" in tag: res["aura"] = val
+                        elif "destiny" in tag: res["destiny"] = val
+                        elif "strength" in tag: res["strength"] = val
+                        elif "life path" in tag or "path" in tag: res["path"] = val
+                        elif "comp" in tag: res["comp"] = val
+                        elif "element" in tag: res["element"] = val
                         elif "fact" in tag: res["fact"] = val
-                        elif "visual" in tag or "scene" in tag: res["visual"] = val
-                
-                # If essential fields are missing, try a second split level (Gemini sometimes duplicates)
-                if not (res["meaning"] and res["origin"]):
-                     # Attempt fallback parsing if formatting was weird
-                     pass
+                        elif "vision" in tag or "deep" in tag: res["vision"] = val
 
-                if res["meaning"] or res["origin"]:
+                if res["essence"] or res["vision"]:
                     # Fill missing values with proactive defaults
-                    if not res["meaning"]: res["meaning"] = "A unique and creative soul"
-                    if not res["origin"]:  res["origin"] = "Traditional Origin"
-                    if not res["color"]:   res["color"] = "Aura Gold"
-                    if not res["num"]:     res["num"] = str(random.randint(1,9))
-                    if not res["day"]:     res["day"] = "Friday"
-                    if not res["comp"]:    res["comp"] = "Best with: A, S, M"
-                    if not res["traits"]:  res["traits"] = "Compassionate, Bold and Intelligent"
-                    if not res["fact"]:    res["fact"] = "A name with ancient roots"
-                    if not res["visual"]:  res["visual"] = "Ethereal sunrise over mystical mountain peaks"
+                    if not res["essence"]: res["essence"] = "A unique and creative soul"
+                    if not res["legacy"]:  res["legacy"] = "Ancient Wisdom"
+                    if not res["aura"]:    res["aura"] = "Aura Gold | High Frequency"
+                    if not res["destiny"]: res["destiny"] = "Success and Harmony"
+                    if not res["strength"]: res["strength"] = "Unwavering Courage"
+                    if not res["path"]:    res["path"] = "Leading others toward light"
+                    if not res["comp"]:    res["comp"] = "A, S, M"
+                    if not res["element"]: res["element"] = "Golden Light"
+                    if not res["fact"]:    res["fact"] = "A name with timeless roots"
+                    if not res["vision"]:  res["vision"] = f"The name {name} carries a vibration of infinite possibility and deep spiritual connection, resonating with those who seek truth and harmony in their surroundings."
                     
-                    print(f"   [Gemini/{model}] {res['meaning']}")
+                    # LOG parsed profile
+                    logger.info(f"Parsed profile for {name}: {res}")
+                    print(f"   [Gemini/{model}] {res['essence']}")
                     return list(res.values())
         except Exception as e:
             logger.warning(f"{model}: {e}")
 
     first = name.split()[0].lower()
     m = FALLBACK_MEANINGS.get(first, "Unique and powerful soul")
-    return [m, "Ancient Origin", "Emerald Green", "7", "Friday", "A, S, M", "Compassionate and strong", "A name with deep history", "Abstract glowing cosmic nebulae in deep space"]
+    fallback_data = [m, "Ancient Roots", "Emerald Glow | Peace", "Inner Balance", "Compassion", "Spreading kindness and wisdom", "A, S, M", "White Dove", "A name with deep history", "A soul that radiates kindness and wisdom, deeply rooted in traditions while embracing modern innovation with grace and strength."]
+    logger.info(f"Using fallback data for {name}: {fallback_data}")
+    return fallback_data
 
 def generate_ass(name, style, total, data_list, path):
     pc  = style["pc"]
@@ -172,16 +178,18 @@ def generate_ass(name, style, total, data_list, path):
     wc  = style["wc"]
     label = clean(style["label"], 30)
     
-    meaning, origin, color, num, day, comp, traits, fact, visual = data_list
+    essence, legacy, aura, destiny, strength, life_path, comp, element, fact, vision = data_list
     safe_name    = clean(name.upper(), 20)
-    safe_meaning = clean(meaning, 55)
-    safe_origin  = clean(origin, 35)
-    safe_color   = clean(color, 25)
-    safe_num     = clean(num, 15)
-    safe_day     = clean(day, 20)
+    safe_essence = clean(essence, 55)
+    safe_legacy  = clean(legacy, 35)
+    safe_aura    = clean(aura, 35)
+    safe_destiny = clean(destiny, 35)
+    safe_strength= clean(strength, 35)
+    safe_path    = clean(life_path, 60)
     safe_comp    = clean(comp, 35)
-    safe_traits  = clean(traits, 60)
+    safe_element = clean(element, 35)
     safe_fact    = clean(fact, 60)
+    safe_vision  = clean(vision, 350)
 
     title_font = "DejaVu Sans Bold"
     if "Clicker" in DEFAULT_FONT: title_font = "Clicker Script"
@@ -204,20 +212,23 @@ def generate_ass(name, style, total, data_list, path):
         else:          delays.append(0.3)
 
     CX = 540
-    # Premium Centered Layout
+    # Slide Positions
     Y_LABEL      = 140
     Y_NAME_TYPE  = 960
-    Y_NAME_REV   = 280
     
-    Y_MEANING    = 440
-    Y_ORIGIN     = 580
-    Y_LUCKY      = 710
-    Y_DAY_COMP   = 840
-    
-    Y_TRAITS_L   = 1040
-    Y_TRAITS_V   = 1120
-    Y_FACT_L     = 1260
-    Y_FACT_V     = 1340
+    # Common layout
+    Y_TIT        = 280
+    Y_L1         = 480
+    Y_V1         = 560
+    Y_L2         = 720
+    Y_V2         = 800
+    Y_L3         = 960
+    Y_V3         = 1040
+    Y_L4         = 1200
+    Y_V4         = 1280
+
+    Y_VISION_L   = 500
+    Y_VISION_V   = 760
     
     Y_HOLD       = 1740
     Y_BAR        = 1860
@@ -226,7 +237,17 @@ def generate_ass(name, style, total, data_list, path):
     type_start    = 3.7
     type_end      = type_start + sum(delays)
     content_start = type_end + 0.3
-    outro_start   = total - 5.5
+    
+    # Timing
+    available_content_time = total - content_start - 5.5
+    slide_dur = available_content_time / 4.0
+    
+    s1_end = content_start + slide_dur
+    s2_end = s1_end + slide_dur
+    s3_end = s2_end + slide_dur
+    vision_start = s3_end
+    vision_end   = total - 5.5
+    outro_start  = vision_end
 
     def t(sec):
         h = int(sec // 3600)
@@ -244,6 +265,7 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Title,{title_font},60,{pc},&H00000000,&H00000000,&H66000000,1,0,0,0,100,100,2,0,1,2,2,5,60,60,0,1
 Style: Body,{body_font},45,{hc},&H00000000,&H00000000,&H66000000,1,0,0,0,100,100,1,0,1,1,2,5,100,100,0,1
+Style: DeepBody,{body_font},45,{hc},&H00000000,&H00000000,&H33000000,1,0,0,0,100,100,1,0,1,1,1,5,100,100,150,1
 Style: Accent,{accent_font},48,{pc},&H00000000,&H00000000,&H66000000,1,0,0,0,100,100,2,0,1,1,1,5,100,100,0,1
 Style: Highlight,DejaVu Sans,45,&H00FFFFFF,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,1,0,5,80,80,0,1
 Style: Base,DejaVu Sans,10,&H00FFFFFF,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
@@ -258,7 +280,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ass += f"Dialogue: 0,{t(0)},{t(hook_end)},Title,,0,0,0,,{{\\pos({CX},{Y_LABEL})\\fs45\\c{pc[2:]}\\an5\\fad(300,300)}}{label}\n"
 
     # Hook
-    ass += f"Dialogue: 1,{t(0)},{t(hook_end)},Title,,0,0,0,,{{\\pos({CX},900)\\fs95\\c{hc[2:]}\\an5\\fad(400,400)\\fscx95\\fscy95\\t(0,2500,\\fscx105\\fscy105)}}COMMENT YOUR NAME\n"
+    ass += f"Dialogue: 1,{t(0)},{t(hook_end)},Title,,0,0,0,,{{\\pos({CX},900)\\fs95\\c{hc[2:]}\\an5\\fad(400,400)}}COMMENT YOUR NAME\n"
     ass += f"Dialogue: 1,{t(0)},{t(hook_end)},Title,,0,0,0,,{{\\pos({CX},1050)\\fs82\\c{hc[2:]}\\an5\\fad(600,400)}}TO GET YOURS! 🚀\n"
 
     # Name Typing
@@ -272,53 +294,75 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         cursor = "|" if i < len(safe_name)-1 else ""
         ass += f"Dialogue: 1,{t(ls)},{t(end)},Title,,0,0,0,,{{\\pos({CX},{Y_NAME_TYPE})\\fs{nfs}\\c{pc[2:]}\\an5}}{shown}{cursor}\n"
 
-    # Reveal - Premium Centered Content
-    ass += f"Dialogue: 1,{t(content_start)},{t(outro_start)},Title,,0,0,0,,{{\\pos({CX},{Y_NAME_REV})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
+    # SLIDE 1: THE ESSENCE
+    ass += f"Dialogue: 1,{t(content_start)},{t(s1_end)},Title,,0,0,0,,{{\\pos({CX},{Y_TIT})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
+    ass += f"Dialogue: 1,{t(content_start+0.4)},{t(s1_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}✨ THE CORE ESSENCE\n"
+    ass += f"Dialogue: 1,{t(content_start+0.6)},{t(s1_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1})\\fs52\\c{hc[2:]}\\an5\\fad(500,300)\\i1}}\"{safe_essence}\"\n"
+    ass += f"Dialogue: 1,{t(content_start+0.9)},{t(s1_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L2})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🗺️ ROOT LEGACY\n"
+    ass += f"Dialogue: 1,{t(content_start+1.1)},{t(s1_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V2})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_legacy}\n"
+    ass += f"Dialogue: 1,{t(content_start+1.4)},{t(s1_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L3})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🔮 SOUL AURA\n"
+    ass += f"Dialogue: 1,{t(content_start+1.6)},{t(s1_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V3})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_aura}\n"
+    ass += f"Dialogue: 1,{t(content_start+1.9)},{t(s1_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L4})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}💎 RESONATES WITH\n"
+    ass += f"Dialogue: 1,{t(content_start+2.1)},{t(s1_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V4})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_comp}\n"
+
+    # SLIDE 2: HIDDEN POWERS
+    ass += f"Dialogue: 1,{t(s1_end)},{t(s2_end)},Title,,0,0,0,,{{\\pos({CX},{Y_TIT})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
+    ass += f"Dialogue: 1,{t(s1_end+0.4)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}⚡ INNER STRENGTH\n"
+    ass += f"Dialogue: 1,{t(s1_end+0.6)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1})\\fs52\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_strength}\n"
+    ass += f"Dialogue: 1,{t(s1_end+0.9)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L2})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🎯 DESTINY\n"
+    ass += f"Dialogue: 1,{t(s1_end+1.1)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V2})\\fs48\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_destiny}\n"
+    ass += f"Dialogue: 1,{t(s1_end+1.4)},{t(s2_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L3})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🚀 LIFE PATH\n"
+    ass += f"Dialogue: 1,{t(s1_end+1.6)},{t(s2_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V3})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_path}\n"
+
+    # SLIDE 3: SACRED ELEMENTS
+    ass += f"Dialogue: 1,{t(s2_end)},{t(s3_end)},Title,,0,0,0,,{{\\pos({CX},{Y_TIT})\\fs{int(nfs*0.75)}\\c{pc[2:]}\\an5\\fad(300,300)}}{safe_name}\n"
+    ass += f"Dialogue: 1,{t(s2_end+0.4)},{t(s3_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L1})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}🌿 SPIRIT ELEMENT\n"
+    ass += f"Dialogue: 1,{t(s2_end+0.6)},{t(s3_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V1})\\fs52\\c{hc[2:]}\\an5\\fad(500,300)}}{safe_element}\n"
+    ass += f"Dialogue: 1,{t(s2_end+0.9)},{t(s3_end)},Accent,,0,0,0,,{{\\pos({CX},{Y_L2})\\fs35\\c{pc[2:]}\\an5\\fad(500,300)}}📚 SACRED FACT\n"
     
-    # Meaning
-    m_fs = 65 if len(safe_meaning) < 20 else 55
-    ass += f"Dialogue: 1,{t(content_start+0.4)},{t(outro_start)},Body,,0,0,0,,{{\\pos({CX},{Y_MEANING})\\fs{m_fs}\\c{hc[2:]}\\an5\\fad(500,300)\\i1}}\"{safe_meaning}\"\n"
+    # Wrap sacred fact
+    wrapped_fact = ""
+    f_words = safe_fact.split()
+    f_line = 0
+    for w in f_words:
+        if f_line + len(w) > 35:
+            wrapped_fact += "\\N"
+            f_line = 0
+        wrapped_fact += w + " "
+        f_line += len(w) + 1
+
+    ass += f"Dialogue: 1,{t(s2_end+1.1)},{t(s3_end)},Body,,0,0,0,,{{\\pos({CX},{Y_V2})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}{wrapped_fact}\n"
+
+    # GRAND VISION SLIDE
+    ass += f"Dialogue: 1,{t(vision_start)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_VISION_L})\\fs65\\c{pc[2:]}\\an5\\fad(500,500)}}💫 GRAND VISION\n"
     
-    # Origin
-    ass += f"Dialogue: 1,{t(content_start+0.7)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_ORIGIN})\\fs45\\c{pc[2:]}\\an5\\fad(500,300)}}🗺️ {safe_origin}\n"
-    
-    # Color & Number
-    vibe_text = f"Color: {safe_color}  |  Number: {safe_num}"
-    ass += f"Dialogue: 1,{t(content_start+1.0)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_LUCKY})\\fs45\\c{hc[2:]}\\an5\\fad(500,300)}}🍀 {vibe_text}\n"
-    
-    # Day & Compatibility
-    day_comp = f"Day: {safe_day}  |  {safe_comp}"
-    ass += f"Dialogue: 1,{t(content_start+1.3)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_DAY_COMP})\\fs45\\c{pc[2:]}\\an5\\fad(500,300)}}☀️ {day_comp}\n"
-    
-    # Traits
-    traits_split = [tr.strip() for tr in safe_traits.split(",")]
-    bullets = "  •  ".join(traits_split[:3])
-    if len(bullets) > 50: bullets = bullets.replace("  •  ", "\\N• ", 1)
-    
-    ass += f"Dialogue: 1,{t(content_start+1.6)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_TRAITS_L})\\fs42\\c{hc[2:]}\\an5\\fad(500,300)}}✦ PERSONALITY TRAITS ✦\n"
-    ass += f"Dialogue: 1,{t(content_start+1.8)},{t(outro_start)},Body,,0,0,0,,{{\\pos({CX},{Y_TRAITS_V})\\fs45\\c{pc[2:]}\\an5\\fad(500,300)}}• {bullets}\n"
-    
-    # Fact
-    wrapped_fact = safe_fact
-    if len(safe_fact) > 40:
-        mid = len(safe_fact) // 2
-        sp = safe_fact.find(" ", mid-10)
-        if sp != -1: wrapped_fact = safe_fact[:sp] + "\\N" + safe_fact[sp+1:]
-    ass += f"Dialogue: 1,{t(content_start+2.1)},{t(outro_start)},Accent,,0,0,0,,{{\\pos({CX},{Y_FACT_L})\\fs42\\c{hc[2:]}\\an5\\fad(500,300)}}✦ UNIQUE FACT ✦\n"
-    ass += f"Dialogue: 1,{t(content_start+2.3)},{t(outro_start)},Body,,0,0,0,,{{\\pos({CX},{Y_FACT_V})\\fs45\\c{pc[2:]}\\an5\\fad(500,300)}}{wrapped_fact}\n"
+    # Wrap vision
+    wrapped_vision = ""
+    v_words = safe_vision.split()
+    v_line = 0
+    for w in v_words:
+        if v_line + len(w) > 32:
+            wrapped_vision += "\\N"
+            v_line = 0
+        wrapped_vision += w + " "
+        v_line += len(w) + 1
+
+    ass += f"Dialogue: 1,{t(vision_start+0.5)},{t(outro_start)},DeepBody,,0,0,0,,{{\\pos({CX},{Y_VISION_V})\\fs50\\c{hc[2:]}\\an5\\fad(800,500)}}{wrapped_vision}\n"
 
     # Hold to read
-    ass += f"Dialogue: 2,{t(content_start+3.0)},{t(outro_start)},Highlight,,0,0,0,,{{\\pos({CX},{Y_HOLD})\\fs42\\c&H00FFFFFF\\3c&H66000000\\an5\\fad(600,0)}}👉 HOLD TO READ FULL PROFILE\n"
+    ass += f"Dialogue: 2,{t(content_start+2.5)},{t(outro_start)},Highlight,,0,0,0,,{{\\pos({CX},{Y_HOLD})\\fs42\\c&H00FFFFFF\\3c&H66000000\\an5\\fad(600,0)}}👉 {name.upper()} SOUL REVEALED\n"
 
     # Progress bar
-    ass += f"Dialogue: 0,{t(content_start)},{t(outro_start)},Base,,0,0,0,,{{\\pos({CX},{Y_BAR})\\p1}}m 0 0 l 840 0 l 840 6 l 0 6{{\\c&HFFFFFF55\\an5}}\n"
-    bar_dur = (outro_start - content_start) * 1000
-    ass += f"Dialogue: 1,{t(content_start)},{t(outro_start)},Base,,0,0,0,,{{\\pos(120,{Y_BAR})\\p1\\t(0,{bar_dur},\\fscx100)}}m 0 0 l 8 0 l 8 6 l 0 6{{\\fscx0\\c{pc[2:]}\\an4}}\n"
+    bar_start = content_start
+    bar_end   = vision_end
+    ass += f"Dialogue: 0,{t(bar_start)},{t(bar_end)},Base,,0,0,0,,{{\\pos({CX},{Y_BAR})\\p1}}m 0 0 l 840 0 l 840 6 l 0 6{{\\c&HFFFFFF55\\an5}}\n"
+    bar_dur = (bar_end - bar_start) * 1000
+    ass += f"Dialogue: 1,{t(bar_start)},{t(bar_end)},Base,,0,0,0,,{{\\pos(120,{Y_BAR})\\p1\\t(0,{bar_dur},\\fscx100)}}m 0 0 l 8 0 l 8 6 l 0 6{{\\fscx0\\c{pc[2:]}\\an4}}\n"
 
     # Outro
-    ass += f"Dialogue: 2,{t(outro_start)},{t(total)},Title,,0,0,0,,{{\\pos({CX},800)\\fs95\\c{pc[2:]}\\an5\\fad(500,0)\\fscx80\\fscy80\\t(0,700,\\fscx100\\fscy100)}}COMMENT YOUR NAME! 👇\n"
-    ass += f"Dialogue: 2,{t(outro_start+0.6)},{t(total)},Title,,0,0,0,,{{\\pos({CX},960)\\fs62\\c{hc[2:]}\\an5\\fad(400,0)}}Want yours? Follow @space_gallary 🔔\n"
-    ass += f"Dialogue: 2,{t(outro_start+1.2)},{t(total)},Title,,0,0,0,,{{\\pos({CX},1120)\\fs52\\c{pc[2:]}\\an5\\fad(400,0)}}🔔 SAVE THIS REEL 📌\n"
+    ass += f"Dialogue: 2,{t(outro_start)},{t(total)},Title,,0,0,0,,{{\\pos({CX},800)\\fs95\\c{pc[2:]}\\an5\\fad(500,0)}}COMMENT YOUR NAME! 👇\n"
+    ass += f"Dialogue: 2,{t(outro_start+0.6)},{t(total)},Title,,0,0,0,,{{\\pos({CX},960)\\fs72\\c{hc[2:]}\\an5\\fad(400,0)}}Follow @space_gallary for your reveal 🔔\n"
+    ass += f"Dialogue: 2,{t(outro_start+1.2)},{t(total)},Title,,0,0,0,,{{\\pos({CX},1120)\\fs52\\c{pc[2:]}\\an5\\fad(400,0)}}📌 SAVE THIS REEL\n"
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(ass)
@@ -327,7 +371,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 def get_brand_background(color_vibe, visual_desc):
     v = (color_vibe + " " + visual_desc).lower()
     assets = "brand_assets"
-    # Map vibes to assets
     if any(x in v for x in ["gold", "dark", "night", "power", "forest", "black"]):
         path = os.path.join(assets, "dark_forest.png")
     elif any(x in v for x in ["sky", "blue", "peace", "nature", "cloud", "day"]):
@@ -343,27 +386,38 @@ def build_name_reel(name, style, music_path, output_path):
     bg_color = style["bg"]
     n = len(name)
     typing_time = 1.8 + 0.8 + max(0, n-2) * 0.3
-    total = int(max(22, min(28, 3.7 + typing_time + 8.0 + 5.5)))
+    # Calculate required time: Intro(3.7 + typing) + 3 Slides(6.5 each) + Vision(7.5) + Outro(5.5)
+    required_time = 3.7 + typing_time + (3 * 6.5) + 7.5 + 5.5
+    total = int(max(DEFAULT_VIDEO_DURATION, min(45, required_time)))
 
     print(f"📖 Getting data for: {name}")
     data_list = fetch_name_data(name)
-    meaning, origin, color, num, day, comp, traits, fact, visual = data_list
-    print(f"   Meaning : {meaning}")
-    print(f"   Origin  : {origin}")
-    print(f"   Vibe    : {color} | {num}")
-    print(f"   Day/Comp: {day} | {comp}")
-    print(f"   Visual  : {visual}")
+    essence, legacy, aura, destiny, strength, life_path, comp, element, fact, vision = data_list
+    print(f"   Essence : {essence}")
+    print(f"   Vision  : {vision[:50]}...")
 
-    ass_path = os.path.join(TEMP_DIR, f"{re.sub(r'[^a-z0-9]','_',name.lower())}.ass")
+    ass_path = os.path.abspath(os.path.join(TEMP_DIR, f"{re.sub(r'[^a-z0-9]','_',name.lower())}.ass"))
     font_dir = os.path.dirname(DEFAULT_FONT) if "/" in DEFAULT_FONT else "/usr/share/fonts"
     generate_ass(name, style, total, data_list, ass_path)
 
-    bg_img = get_brand_background(color, visual)
-    sub_filter = f"subtitles='{ass_path}':fontsdir='{font_dir}'"
-    has_music = music_path is not None and os.path.exists(music_path)
+    bg_img = get_brand_background(aura, vision)
+    # Escape path for FFmpeg filter: replace ":" with "\:" and "'" with "\'"
+    escaped_ass_path = ass_path.replace(":", "\\:").replace("'", "'\\\\''")
+    sub_filter = f"subtitles='{escaped_ass_path}':fontsdir='{font_dir}'"
+    
+    # Auto-fetch music if not provided
+    temp_music = None
+    if music_path is None or not os.path.exists(music_path):
+        print(f"🎵 Fetching background music for {total}s...")
+        temp_music = audio_utils.get_background_music(total)
+        final_music = temp_music
+    else:
+        final_music = music_path
+
+    has_music = final_music is not None and os.path.exists(final_music)
 
     inputs = []
-    if has_music: inputs.append(music_path)
+    if has_music: inputs.append(final_music)
     if bg_img:    inputs.append(bg_img)
     
     bg_idx = 1 if (has_music and bg_img) else 0 if bg_img else -1
@@ -410,7 +464,12 @@ def build_name_reel(name, style, music_path, output_path):
         return None
     finally:
         if os.path.exists(ass_path):
-            os.remove(ass_path)
+            try:
+                os.remove(ass_path)
+            except:
+                pass
+        if temp_music and os.path.exists(temp_music):
+            audio_utils.cleanup_audio(temp_music)
 
 def create_name_reel(name, style_index=None, music_path=None):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
